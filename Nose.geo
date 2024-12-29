@@ -47,7 +47,6 @@ Physical Curve("symmetry", 11) = {5};
 Physical Curve("outlet", 12) = {6};
 Physical Curve("wall", 13) = {2, 3};
 
-
 //+
 Curve Loop(1) = {9, -7, 3, 6};
 //+
