@@ -4,10 +4,11 @@
 radius = 0.01; // Radius for the wall
 theta = 15 * Pi / 180; // Angle in radians
 length = 0.04; // Wall length
-Far_R = 5 * radius; // Farfield radius
-Far_L = length * 1.3; // Farfield length
+Far_R = 3.85 * radius; // Farfield radius
+Far_L = length * 1.07; // Farfield length
 points = 1000; // Number of points for farfield approximation
 midpoint = (points * 0.2) + 5;
+C = (0.7); // Haack constant for the ogive shape (adjust as needed)
 
 // Mesh Parameters
 axial = 200; // Axial cells
@@ -26,10 +27,10 @@ Point(5) = {length, (length - (radius - radius * Sin(theta))) * Tan(theta) + rad
 Circle(2) = {1, 2, 3}; // Creates a circular arc
 Line(3) = {3, 5};       // Connects the end of the arc to another point
 
-// Generate Points for Farfield Ogive
+// Generate Points for Farfield Ogive with Haack Series
 For j In {0:points-1}
     x = j * Far_L / (points - 1);  // Distribute points evenly from 0 to Far_L
-    Y = (Far_R / Sqrt(Pi)) * Sqrt(Acos(1 - (2 * x) / Far_L) - (Sin(2 * Acos(1 - (2 * x) / Far_L)) / 2));
+    Y = (Far_R / Sqrt(Pi)) * Sqrt(Acos(1 - (2 * x) / Far_L) - (Sin(2 * Acos(1 - (2 * x) / Far_L)) / 2) + C * Sin(Acos(1 - (2 * x) / Far_L))^3);
     
     // Define a point with calculated coordinates, adjusting for alignment
     Point(6 + j) = {x - (Far_L - length), Y, 0, 1.0};
@@ -60,3 +61,9 @@ Transfinite Curve {5, 7, 6} = radial Using Progression gr;   // Refine mesh alon
 Transfinite Surface {1};  // Apply transfinite meshing to Surface 1
 Transfinite Surface {2};  // Apply transfinite meshing to Surface 2
 Recombine Surface {2, 1}; // Recombine surfaces for quadrilateral elements
+
+// Mesh Boundaries 
+Physical Curve("Farfield", 5) = {8, 9};
+Physical Curve("Symmetry", 6) = {5};
+Physical Curve("Wall", 7) = {2, 3};
+Physical Curve("Outlet", 8) = {6};
