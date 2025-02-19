@@ -203,9 +203,10 @@ Transfinite Curve {{6}} = radialCells Using Progression gr6;
 
 // Define Surface Boundaries
 Curve Loop(1) = {{9, -6, -3, 7}}; // Loop for Plane Surface 1
-Plane Surface(1) = {{1}};         // Define Plane Surface 1
+Plane Surface(1) = {{1}};         // Define Plane Surface 
 Curve Loop(2) = {{8, -7, -2, 5}}; // Loop for Plane Surface 2
 Plane Surface(2) = {{2}};         // Define Plane Surface 2
+Physical Surface("domain") = {{1, 2}};  // Include both surfaces in the domain
 
 // Mesh Surface Control
 Transfinite Surface {{1}};  // Apply transfinite meshing to Surface 1
@@ -222,6 +223,12 @@ Physical Curve("outlet", 8) = {{6}};         // Outlet boundary
 
 // Generate the mesh
 Mesh 2;
+
+// Set the mesh format to SU2 (optional, format code 42)
+Mesh.Format = 42;
+
+// Save the mesh in SU2 format
+Save "mesh.su2";
 """
 
 # Write .geo file and run Gmsh
