@@ -1,5 +1,6 @@
 import os
 import subprocess
+import shutil
 import numpy as np
 from scipy.optimize import root_scalar
 
@@ -8,47 +9,58 @@ geo_filename = "python_wedge.geo"
 su2_filename = "iteration_2.su2"
 
 # Define geometry parameters
-r_wall = 0.01
-angle = np.radians(15)
-length = 0.04
-r_far = 3.85 * r_wall
-l_far = length * 1.3
-haack = 0.7
-n_ogive = 1000
-h_first = 1e-6
-n_radial = 200
+leading_edge_radius = 0.01               # Radius of the leading edge [m]
+wedge_angle_deg = 15                     # Wedge angle in degrees
+wedge_length = 0.04                      # Total length of the wedge [m]
+farfield_radius_factor = 3.85            # Factor to calculate farfield radius
+farfield_length_factor = 1.3             # Factor to calculate farfield length
+haack_series_coefficient = 0.7           # Haack series shape parameter [0-1]
+num_ogive_points = 1000                  # Number of points for farfield ogive
+boundary_layer_height = 1e-6             # Height of the first boundary layer cell [m]
+num_radial_cells = 200                    # Number of radial cells
+num_axial_cells = 200                    # 
 
-# Calculate line lengths
-l5 = l_far - length
-print(f"Length 5: {l5}")
+# Calculate Derived Lengths
+farfield_length = wedge_length * farfield_length_factor
+length_difference = farfield_length - wedge_length
+print(f"Length Difference: {length_difference}")
 
-y_start = (length - (r_wall - r_wall * np.sin(angle))) * np.tan(angle) + r_wall * np.cos(angle)
-y_end = (r_far / np.sqrt(np.pi)) * np.sqrt(np.arccos(1 - 2) - (np.sin(2 * np.arccos(1 - 2)) / 2) + haack * np.sin(np.arccos(1 - 2))**3)
-l6 = abs(y_end - y_start)
-print(f"Length 6: {l6}")
+# Calculate Y-Coordinates for Line 6
+y_start = (wedge_length - (leading_edge_radius - leading_edge_radius * np.sin(np.radians(wedge_angle_deg)))) \
+          * np.tan(np.radians(wedge_angle_deg)) + leading_edge_radius * np.cos(np.radians(wedge_angle_deg))
+y_end_expression = 1 - 2  # This seems to be a constant; verify if intended
+y_end = (farfield_radius_factor * leading_edge_radius / np.sqrt(np.pi)) \
+        * np.sqrt(np.arccos(y_end_expression) - (np.sin(2 * np.arccos(y_end_expression)) / 2) \
+        + haack_series_coefficient * np.sin(np.arccos(y_end_expression))**3)
+length_line6 = abs(y_end - y_start)
+print(f"Length Line 6: {length_line6}")
 
-mid_point = int(n_ogive * 0.2) + 5
-x_calc = (mid_point - 6) * l_far / (n_ogive - 1)
-x_mid = x_calc - (l_far - length)
-y_mid = (r_far / np.sqrt(np.pi)) * np.sqrt(np.arccos(1 - (2 * x_calc / l_far)) - (np.sin(2 * np.arccos(1 - (2 * x_calc / l_far))) / 2) + haack * np.sin(np.arccos(1 - (2 * x_calc / l_far)))**3)
-x3 = r_wall - r_wall * np.sin(angle)
-y3 = r_wall * np.cos(angle)
-l7 = np.sqrt((abs(x_mid) + x3)**2 + (y_mid - y3)**2)
-print(f"Length 7: {l7}")
+# Calculate Midpoint Coordinates for Line 7
+mid_ogive_index = int(num_ogive_points * 0.2) + 5
+x_calculation = (mid_ogive_index - 6) * farfield_length / (num_ogive_points - 1)
+x_midpoint = x_calculation - (farfield_length - wedge_length)
+y_midpoint = (farfield_radius_factor * leading_edge_radius / np.sqrt(np.pi)) \
+             * np.sqrt(np.arccos(1 - (2 * x_calculation / farfield_length)) \
+             - (np.sin(2 * np.arccos(1 - (2 * x_calculation / farfield_length))) / 2) \
+             + haack_series_coefficient * np.sin(np.arccos(1 - (2 * x_calculation / farfield_length)))**3)
+x_point_wall = leading_edge_radius - leading_edge_radius * np.sin(np.radians(wedge_angle_deg))
+y_point_wall = leading_edge_radius * np.cos(np.radians(wedge_angle_deg))
+length_line7 = np.sqrt((abs(x_midpoint) + x_point_wall)**2 + (y_midpoint - y_point_wall)**2)
+print(f"Length Line 7: {length_line7}")
 
-# Calculate growth rates
-def calculate_growth_rate(total_length, ds, N):
-    def f(gr):
-        if np.isclose(gr, 1.0):
-            return ds * (N - 1) - total_length
+# Growth Rate Calculation Function
+def calculate_growth_rate(total_length, initial_cell_size, num_cells):
+    def growth_rate_equation(growth_rate):
+        if np.isclose(growth_rate, 1.0):
+            return initial_cell_size * (num_cells - 1) - total_length
         else:
-            return ds * (1 - gr**(N-1)) / (1 - gr) - total_length
-    result = root_scalar(f, bracket=[1.0 + 1e-6, 1.2], method='brentq')
+            return initial_cell_size * (1 - growth_rate**(num_cells - 1)) / (1 - growth_rate) - total_length
+    result = root_scalar(growth_rate_equation, bracket=[1.0 + 1e-6, 1.2], method='brentq')
     return result.root
 
-GR5 = calculate_growth_rate(l5, h_first, n_radial)
-GR6 = calculate_growth_rate(l6, h_first, n_radial)
-GR7 = calculate_growth_rate(l7, h_first, n_radial)
+GR5 = calculate_growth_rate(length_difference, boundary_layer_height, num_radial_cells)
+GR6 = calculate_growth_rate(length_line6, boundary_layer_height, num_radial_cells)
+GR7 = calculate_growth_rate(length_line7, boundary_layer_height, num_radial_cells)
 
 # Print the growth rates
 print(f"Growth rate 5: {GR5:.6f}")
@@ -73,31 +85,50 @@ geo_content = f"""//============================================================
 // WEDGE GEOMETRY PARAMETERS
 //-----------------------------------------------------------------------------
 // Basic wedge dimensions
-wallRadius = 0.01;                    // Leading edge radius [m]
-wedgeAngle = 15 * Pi / 180;          // Wedge angle [rad]
-wedgeLength = 0.04;                   // Total wedge length [m]
+wallRadius = {leading_edge_radius};                    // Leading edge radius [m]
+wedgeAngle = {wedge_angle_deg} * Pi / 180;          // Wedge angle [rad]
+wedgeLength = {wedge_length};                   // Total wedge length [m]
+
+Printf("wall radius: %g", wallRadius);
+Printf("wedge angle: %g", wedgeAngle);
+Printf("wedge length: %g", wedgeLength);
 
 // Farfield domain parameters
-farfieldRadius = 3.85 * wallRadius;   // Farfield boundary radius [m]
-farfieldLength = wedgeLength * 1.3;   // Farfield domain length [m]
+farfieldRadius = {farfield_radius_factor} * wallRadius;   // Farfield boundary radius [m]
+farfieldLength = wedgeLength * {farfield_length_factor};   // Farfield domain length [m]
+
+Printf("farfield radius: %g", farfieldRadius);
+Printf("farfield length: %g", farfieldLength);
 
 // Ogive curve discretization
-ogivePoints = 1000;                   // Number of points for farfield ogive
+ogivePoints = {num_ogive_points};                   // Number of points for farfield ogive
 ogiveMidpoint = (ogivePoints * 0.2) + 5;  // Splitting point for mesh control
-haackConstant = 0.7;                  // Haack series shape parameter [0-1]
+haackConstant = {haack_series_coefficient};                  // Haack series shape parameter [0-1]
+
+Printf("ogive points: %g", ogivePoints);
+Printf("ogive midpoint: %g", ogiveMidpoint);
+Printf("haack constant: %g", haackConstant);
 
 //-----------------------------------------------------------------------------
 // MESH CONTROL PARAMETERS
 //-----------------------------------------------------------------------------
 // Mesh density controls
-radialCells = 200;
-axialCells = 200;                     // Cells along axial direction
-firstLayerHeight = 1E-6;             // First cell height for boundary layer [m]
+radialCells = {num_radial_cells};
+axialCells = {num_axial_cells};                     // Cells along axial direction
+firstLayerHeight = {boundary_layer_height};             // First cell height for boundary layer [m]
+
+Printf("radial cells: %g", radialCells);
+Printf("axial cells: %g", axialCells);
+Printf("first layer height: %g", firstLayerHeight);
 
 // Growth rates for specific mesh lines
 gr5 = {GR5};  // Inlet boundary growth rate
 gr6 = {GR6};  // Outlet boundary growth rate
 gr7 = {GR7};  // Middle connector growth rate
+
+Printf("growth rate 5: %g", gr5);
+Printf("growth rate 6: %g", gr6);
+Printf("growth rate 7: %g", gr7);
 
 //-----------------------------------------------------------------------------
 // GEOMETRY CONSTRUCTION
@@ -197,35 +228,41 @@ try:
         f.write(geo_content)
     print(f"Successfully created {geo_filename}")
 
-    # Check if gmsh is available
-    gmsh_check = subprocess.run(["which", "gmsh"], capture_output=True, text=True)
-    if gmsh_check.returncode != 0:
+    # Check if Gmsh is available
+    gmsh_path = shutil.which("gmsh")
+    if gmsh_path is None:
         raise FileNotFoundError("Gmsh not found in system PATH")
 
-    # Run Gmsh with detailed output
+    # Run Gmsh to generate the SU2 mesh
     result = subprocess.run(
-        ["gmsh", "-2", geo_filename, "-format", "su2", "-o", su2_filename],
+        ["gmsh", "-2", geo_filename, "-format", "su2", "-o", su2_filename, "-v", "4"],
         capture_output=True,
         text=True,
         check=True
     )
     
-    # Check if output file was created
+    # Verify output file
     if os.path.exists(su2_filename):
         print(f"Successfully created SU2 mesh file: {su2_filename}")
     else:
         print("Warning: SU2 file not created despite successful Gmsh execution")
-        
-    # Print Gmsh output if there's any
+    
+    # Print Gmsh output for debugging
     if result.stdout:
-        print("Gmsh output:")
+        print("Gmsh Output:")
         print(result.stdout)
+    if result.stderr:
+        print("Gmsh Errors:")
+        print(result.stderr)
 
 except FileNotFoundError as e:
     print(f"Error: {e}")
     print("Please ensure Gmsh is installed and available in your system PATH")
 except subprocess.CalledProcessError as e:
     print(f"Error running Gmsh (exit code {e.returncode}):")
+    print("Gmsh Output:")
+    print(e.stdout)
+    print("Gmsh Errors:")
     print(e.stderr)
 except Exception as e:
     print(f"Unexpected error: {e}")
