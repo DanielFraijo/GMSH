@@ -219,6 +219,9 @@ Physical Curve("farfield", 5) = {{8, 9}};   // Farfield boundary
 Physical Curve("symmetry", 6) = {{5}};       // Symmetry plane
 Physical Curve("wall", 7) = {{2, 3}};        // Wedge surface
 Physical Curve("outlet", 8) = {{6}};         // Outlet boundary
+
+// Generate the mesh
+Mesh 2;
 """
 
 # Write .geo file and run Gmsh
