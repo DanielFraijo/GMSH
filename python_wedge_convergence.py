@@ -6,17 +6,21 @@ from scipy.optimize import root_scalar
 
 # Define file names
 geo_filename = "python_wedge.geo"
-su2_filename = "iteration_2.su2"
 
 # Define geometry parameters
 leading_edge_radius = 0.01               # Radius of the leading edge [m]
 wedge_angle_deg = 15                     # Wedge angle in degrees
 wedge_length = 0.04                      # Total length of the wedge [m]
-farfield_radius_factor = 3.85            # Factor to calculate farfield radius
+farfield_radius_factor = 4.5            # Factor to calculate farfield radius
 farfield_length_factor = 1.3             # Factor to calculate farfield length
 haack_series_coefficient = 0.7           # Haack series shape parameter [0-1]
 num_ogive_points = 1000                  # Number of points for farfield ogive
 boundary_layer_height = 1e-6             # Height of the first boundary layer cell [m]
+# Grid convergence parameters
+radial_cells_start = 50 
+axial_cells_start = 50
+delta_cells = 25
+max_cells = 100
 
 # Calculate Derived Lengths
 farfield_length = wedge_length * farfield_length_factor
@@ -56,11 +60,6 @@ def calculate_growth_rate(total_length, initial_cell_size, num_cells):
     result = root_scalar(growth_rate_equation, bracket=[1.0 + 1e-6, 1.2], method='brentq')
     return result.root
 
-# Grid convergence parameters
-radial_cells_start = 200
-axial_cells_start = 200
-delta_cells = 50
-max_cells = 500
 
 # Create meshes for different grid resolutions
 for i in range(0, (max_cells - radial_cells_start) // delta_cells + 1):
@@ -68,7 +67,7 @@ for i in range(0, (max_cells - radial_cells_start) // delta_cells + 1):
     num_axial_cells = axial_cells_start + (i * delta_cells)
     
     # Update SU2 filename for this iteration
-    su2_filename = f"mesh_r{num_radial_cells}_a{num_axial_cells}.su2"
+    su2_filename = f"wedge_r{num_radial_cells}_a{num_axial_cells}.su2"
     
     # Recalculate growth rates for new cell counts
     GR5 = calculate_growth_rate(length_difference, boundary_layer_height, num_radial_cells)
@@ -237,9 +236,6 @@ for i in range(0, (max_cells - radial_cells_start) // delta_cells + 1):
 
     // Set the mesh format to SU2 (optional, format code 42)
     Mesh.Format = 42;
-
-    // Save the mesh in SU2 format
-    Save "mesh.su2";
     """
     
     try:
