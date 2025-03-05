@@ -15,7 +15,7 @@ farfield_radius_factor = 4.5            # Factor to calculate farfield radius
 farfield_length_factor = 1.3             # Factor to calculate farfield length
 haack_series_coefficient = 0.7           # Haack series shape parameter [0-1]
 num_ogive_points = 1000                  # Number of points for farfield ogive
-boundary_layer_height = 1e-6             # Height of the first boundary layer cell [m]
+boundary_layer_height = 1e-8             # Height of the first boundary layer cell [m]
 # Grid convergence parameters
 radial_cells_start = 50 
 axial_cells_start = 50
@@ -57,7 +57,33 @@ def calculate_growth_rate(total_length, initial_cell_size, num_cells):
             return initial_cell_size * (num_cells - 1) - total_length
         else:
             return initial_cell_size * (1 - growth_rate**(num_cells - 1)) / (1 - growth_rate) - total_length
-    result = root_scalar(growth_rate_equation, bracket=[1.0 + 1e-6, 1.2], method='brentq')
+
+    # Initial bracket
+    r_min, r_max = 1.0 + 1e-6, 1.2
+    f_min = growth_rate_equation(r_min)
+    f_max = growth_rate_equation(r_max)
+
+    # Check if bracket is valid
+    if f_min * f_max > 0:  # Same sign
+        # If both positive, root might be < r_min
+        if f_min > 0:
+            r_min_new = 1.0 + 1e-10
+            f_min_new = growth_rate_equation(r_min_new)
+            if f_min_new < 0:
+                r_min = r_min_new
+            else:
+                raise ValueError(f"No root found: f({r_min_new}) = {f_min_new} and f({r_max}) = {f_max} have same sign.")
+        # If both negative, root might be > r_max
+        elif f_max < 0:
+            r_max_new = 1.5
+            f_max_new = growth_rate_equation(r_max_new)
+            if f_max_new > 0:
+                r_max = r_max_new
+            else:
+                raise ValueError(f"No root found: f({r_min}) = {f_min} and f({r_max_new}) = {f_max_new} have same sign.")
+
+    # Solve with adjusted bracket
+    result = root_scalar(growth_rate_equation, bracket=[r_min, r_max], method='brentq')
     return result.root
 
 
@@ -67,7 +93,7 @@ for i in range(0, (max_cells - radial_cells_start) // delta_cells + 1):
     num_axial_cells = axial_cells_start + (i * delta_cells)
     
     # Update SU2 filename for this iteration
-    su2_filename = f"wedge_r{num_radial_cells}_a{num_axial_cells}.su2"
+    su2_filename = f"wedge_r{num_radial_cells}_a{num_axial_cells}_{boundary_layer_height}.su2"
     
     # Recalculate growth rates for new cell counts
     GR5 = calculate_growth_rate(length_difference, boundary_layer_height, num_radial_cells)
