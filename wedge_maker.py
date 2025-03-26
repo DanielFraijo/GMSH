@@ -87,7 +87,6 @@ def calculate_growth_rate(total_length, initial_cell_size, num_cells):
             if f_min_new < 0:
                 r_min = r_min_new
             else:
-                # If still no sign change, try shrinking initial cell size assumption
                 print(f"Warning: No root found with initial bracket. Returning approximate growth rate.")
                 return 1.0  # Fallback to uniform sizing
         elif f_max < 0:  # Both negative, need larger r
@@ -113,8 +112,10 @@ for bl_height in boundary_layer_heights:
         num_radial_cells = radial_cells_start + (i * delta_cells)
         num_axial_cells = axial_cells_start + (i * delta_cells)
         
-        # Update SU2 filename for this iteration
-        su2_filename = f"wedge_r{num_radial_cells}_a{num_axial_cells}_{bl_height}.su2"
+        # Format boundary layer height as scientific notation without decimal (e.g., 1e-06)
+        bl_str = f"{bl_height:.0e}".replace(".", "")  # Remove decimal point
+        # Update SU2 filename with boundary layer height without decimal
+        su2_filename = f"wedge_r{num_radial_cells}_a{num_axial_cells}_{bl_str}.su2"
         
         # Recalculate growth rates
         GR5 = calculate_growth_rate(length_difference, bl_height, num_radial_cells)
