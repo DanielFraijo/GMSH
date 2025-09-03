@@ -1,54 +1,77 @@
 // Parameters for the geometry
-R = 0.5;  // Radius of the base
-H = R * 5;  // Height/base radius of the second ogive
+R = 0.05;  // Radius of the base
+H = R * 15;  // Height/base radius of the second ogive
 C = 0;    // Haack constant (set to 0 for von Kármán ogive)
 L = 1;    // Length of the first ogive
-U = L * 2; // Extended length for the second ogive
+U = L * 1.2; // Extended length for the second ogive
 N = 10000; // Number of points for approximation of the curve
 
-// Start point for the first ogive
-Point(1) = {L, 0, 0, 1.0};
+// Mesh parameters
+axial_nodes = 6000;
+radial_nodes = 250;
+first_cell_height = 1e-6;
+
+// Growth rates calculated for first cell height
+growth_left = 1.0363552776644864;  // For inlet/symmetry (Curve 3)
+growth_right = 1.0428266347260264;  // For outlet (Curve 4)
 
 // Create points for the first ogive (wall)
 For i In {0:N-1}
-    x = i * L / (N - 1);  // Distribute points evenly from 0 to L
+    x = i * L / (N - 1);
     Y = (R / Sqrt(Pi)) * Sqrt(Acos(1 - (2 * x) / L) - (Sin(2 * Acos(1 - (2 * x) / L)) / 2) + C * Sin(Acos(1 - (2 * x) / L))^3);
-    
-    // Define a point with calculated coordinates
     Point(i + 2) = {x, Y, 0, 1.0};
 EndFor
 
 // Connect points for the first ogive with a spline
-Spline(1) = {2:N+1};  // Corrected to include all points from 2 to N+1
+Spline(1) = {2:N+1};
 
 // Create points for the second ogive (farfield)
 For j In {0:N-1}
-    x = j * U / (N - 1);  // Distribute points evenly from 0 to U
+    x = j * U / (N - 1);
     Y = (H / Sqrt(Pi)) * Sqrt(Acos(1 - (2 * x) / U) - (Sin(2 * Acos(1 - (2 * x) / U)) / 2) + C * Sin(Acos(1 - (2 * x) / U))^3);
-    
-    // Define a point with calculated coordinates, adjusting for the shift in x
     Point(j + N + 2) = {x - (U - L), Y, 0, 1.0};
 EndFor
 
 // Connect points for the second ogive with a spline
-Spline(2) = {N+2:2*N+1};  // Creates a spline from points N+2 to 2*N+1
+Spline(2) = {N+2:2*N+1};
 
 // Define lines to connect splines
-Line(3) = {2, N + 2}; // Connect start of first ogive to start of second ogive
-Line(4) = {N + 1, 2*N + 1}; // Connect end of first ogive to end of second ogive
+Line(3) = {2, N + 2}; // From nose to inlet farfield
+Line(4) = {N + 1, 2*N + 1}; // From wall end to outlet farfield
 
-// Define the surface
-Curve Loop(1) = {2, -4, -1, 3}; // Loop defining the outer boundary of the surface
-Plane Surface(1) = {1}; // Create the plane surface from the curve loop
+// Define the curve loop in counter-clockwise order
+Curve Loop(1) = {-3, 1, 4, -2};
+
+// Create the plane surface
+Plane Surface(1) = {1};
 
 // Mesh refinement settings
-Transfinite Curve {2, 1} = 100 Using Progression 1; // Refine mesh along splines
-Transfinite Curve {3, 4} = 150 Using Progression 1; // Refine mesh along connecting lines
-Transfinite Surface {1}; // Apply transfinite meshing to the surface
-Recombine Surface {1};   // Recombine the surface for quadrilateral elements
+Transfinite Curve {1, 2} = axial_nodes Using Progression 1; // Uniform along axial directions
+Transfinite Curve {3} = radial_nodes Using Progression growth_left; // Graded along inlet/symmetry
+Transfinite Curve {4} = radial_nodes Using Progression growth_right; // Graded along outlet
+Transfinite Surface {1} = {N+2, 2, N+1, 2*N+1} Left; // Explicit corners in order
+
+// Recombine for quadrilateral elements
+Recombine Surface {1};
+
+// Additional settings for better mesh quality
+Mesh.Algorithm = 8;  // Frontal-Delaunay for quads (corrected from Algorithm2D)
+Mesh.RecombinationAlgorithm = 1;  // Blossom for quad quality
+Mesh.Smoothing = 100;  // Laplacian smoothing
+
+// Generate the mesh
+Mesh 2;
+
+// Apply elliptic smoothing to the transfinite surface (fsolve-like elliptic solver)
+Smoother Surface {1} = 500;  // Number of elliptic smoothing iterations
+
+// Further optimize the mesh
+Mesh.Optimize = 1;
 
 // Define physical entities for boundary conditions
 Physical Curve("Farfield", 5) = {2};
 Physical Curve("Symmetry", 6) = {3};
 Physical Curve("Wall", 7) = {1};
 Physical Curve("Outlet", 8) = {4};
+
+Mesh.Format = 42;
